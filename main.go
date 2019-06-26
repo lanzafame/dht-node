@@ -31,7 +31,9 @@ import (
 	record "github.com/libp2p/go-libp2p-record"
 	id "github.com/libp2p/go-libp2p/p2p/protocol/identify"
 	ma "github.com/multiformats/go-multiaddr"
+	"github.com/opentracing/opentracing-go"
 	prom "github.com/prometheus/client_golang/prometheus"
+	config "github.com/uber/jaeger-client-go/config"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/zpages"
 )
@@ -186,6 +188,7 @@ func main() {
 	if *pprofport > 0 {
 		fmt.Println("Running metrics server on port: %d", *pprofport)
 		go setupMetrics(*pprofport)
+		go setupTracing()
 	}
 
 	totalprovs := 0
@@ -320,5 +323,26 @@ func setupMetrics(port int) error {
 			log.Fatalf("Failed to run Prometheus /metrics endpoint: %v", err)
 		}
 	}()
+	return nil
+}
+
+func setupTracing() error {
+	tracerCfg := &config.Configuration{
+		Sampler: &config.SamplerConfig{
+			Type:  "const",
+			Param: 1,
+		},
+		Reporter: &config.ReporterConfig{
+			LogSpans: true,
+		},
+	}
+	//we are ignoring the closer for now
+	tracer, _, err := tracerCfg.New("dht_node_tracer")
+	if err != nil {
+		return err
+	}
+	opentracing.SetGlobalTracer(
+		tracer,
+	)
 	return nil
 }
